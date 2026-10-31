@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>관찰 기록</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 20px 16px 40px;
+      font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background: #fffaf0; color: #333; text-align: center;
+    }
+    #gear {
+      position: absolute; top: 12px; right: 12px; font-size: 22px;
+      background: none; border: none; cursor: pointer;
+    }
+    h1 { font-size: 22px; margin: 4px 0 6px; }
+    .tip { font-size: 15px; color: #777; margin: 0 0 18px; }
+    #mic {
+      width: 150px; height: 150px; border-radius: 50%; border: none;
+      font-size: 64px; background: #ffd966; box-shadow: 0 6px 0 #e6b800;
+      cursor: pointer;
+    }
+    #mic:active { transform: translateY(4px); box-shadow: 0 2px 0 #e6b800; }
+    #mic.on { background: #ff6b6b; box-shadow: 0 6px 0 #d64545; animation: pulse 1.2s infinite; }
+    @keyframes pulse { 50% { transform: scale(1.06); } }
+    #status { margin: 16px 0 6px; font-size: 16px; min-height: 24px; }
+    #live { font-size: 18px; color: #555; min-height: 26px; margin-bottom: 10px; }
+    #saved {
+      display: none; background: #e2f5e2; border-radius: 12px; padding: 12px;
+      margin: 10px 0; font-size: 16px; text-align: left;
+    }
+    #saved button { float: right; }
+    .card {
+      background: #fff; border-radius: 14px; padding: 14px; margin-top: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06); text-align: left;
+    }
+    .card h2 { font-size: 16px; margin: 0 0 10px; }
+    select, textarea, input { width: 100%; font-size: 17px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    textarea { height: 90px; margin-top: 8px; resize: vertical; }
+    button.btn {
+      font-size: 16px; padding: 10px 16px; border: none; border-radius: 10px;
+      background: #4a86e8; color: #fff; cursor: pointer;
+    }
+    button.gray { background: #999; }
+    .row-btn { margin-top: 10px; text-align: right; }
+    .list { list-style: none; padding: 0; margin: 0; font-size: 15px; }
+    .list li { padding: 9px 0; border-bottom: 1px solid #eee; }
+    .meta { color: #999; font-size: 13px; }
+    #chips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 10px; }
+    #chips button {
+      padding: 10px 0; font-size: 15px; border: 1px solid #ddd; border-radius: 10px;
+      background: #f7f7f7; cursor: pointer;
+    }
+    #chips button.active { background: #4a86e8; color: #fff; border-color: #4a86e8; }
+    #byNumTitle { font-weight: bold; margin: 4px 0 6px; font-size: 15px; color: #333; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+    .tabs button {
+      flex: 1; padding: 9px 0; font-size: 15px; border: 1px solid #ddd; border-radius: 10px;
+      background: #f7f7f7; cursor: pointer;
+    }
+    .tabs button.active { background: #f6b26b; color: #fff; border-color: #f6b26b; }
+    #statSummary { font-size: 15px; margin-bottom: 8px; }
+    #noRecord {
+      background: #fdecea; border-radius: 10px; padding: 10px; font-size: 15px;
+      margin-bottom: 10px; display: none;
+    }
+    .bar-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 14px; cursor: pointer; }
+    .bar-row .label { width: 38px; text-align: right; }
+    .bar-row .track { flex: 1; background: #f1f1f1; border-radius: 6px; height: 16px; overflow: hidden; }
+    .bar-row .fill { height: 100%; background: #f6b26b; border-radius: 6px; }
+    .bar-row .count { width: 28px; }
+    .bar-row.zero .label, .bar-row.zero .count { color: #d64545; font-weight: bold; }
+    /* 설정 화면 */
+    #setup {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10;
+    }
+    #setup .box { background: #fff; border-radius: 16px; padding: 18px; width: 100%; max-width: 420px; text-align: left; }
+    #setup h2 { margin: 0 0 12px; font-size: 18px; }
+    #setup label { display: block; font-size: 14px; margin: 10px 0 4px; }
+    #cfgMsg { min-height: 20px; margin: 10px 0; font-size: 14px; color: #d64545; }
+  </style>
+</head>
+<body>
+  <button id="gear" aria-label="설정">⚙️</button>
+  <h1>우리 반 관찰 기록</h1>
+  <p class="tip">"일번, 오늘 발표를 크게 했어요"처럼<br><b>번호를 맨 앞에</b> 말해 주세요</p>
+
+  <button id="mic" aria-label="말하기">🎤</button>
+  <div id="status">버튼을 누르고 말해 주세요</div>
+  <div id="live"></div>
+
+  <div id="saved">
+    <button class="btn gray" id="undoBtn">되돌리기</button>
+    <span id="savedText"></span>
+  </div>
+
+  <div class="card">
+    <h2>✏️ 직접 입력 · 고쳐서 저장</h2>
+    <select id="numSel"></select>
+    <textarea id="txt" placeholder="키보드의 🎤 버튼으로 말해도 돼요. 예) 삼번, 친구를 도와주었어요"></textarea>
+    <div class="row-btn"><button class="btn" id="saveBtn">저장</button></div>
+  </div>
+
+  <div class="card">
+    <h2>📊 간단 통계</h2>
+    <div class="tabs">
+      <button data-p="week" class="active">이번 주</button>
+      <button data-p="month">이번 달</button>
+      <button data-p="all">전체</button>
+    </div>
+    <div id="statSummary" class="meta">불러오는 중…</div>
+    <div id="noRecord"></div>
+    <div id="bars"></div>
+  </div>
+
+  <div class="card">
+    <h2>📋 번호별 보기</h2>
+    <div id="chips"></div>
+    <div id="byNumTitle">번호를 누르면 그 친구의 기록이 모두 나와요</div>
+    <ul id="byNum" class="list"></ul>
+  </div>
+
+  <div class="card">
+    <h2>🕘 최근 기록</h2>
+    <ul id="recent" class="list"><li class="meta">불러오는 중…</li></ul>
+  </div>
+
+  <!-- 처음 설정 -->
+  <div id="setup">
+    <div class="box">
+      <h2>⚙️ 처음 설정</h2>
+      <p class="meta">이 폰에서 한 번만 입력하면 기억해요.</p>
+      <label for="cfgUrl">앱스스크립트 웹앱 주소 (/exec로 끝나요)</label>
+      <input id="cfgUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+      <label for="cfgKey">비밀번호 (Code.gs 첫 줄에 넣은 것)</label>
+      <input id="cfgKey" type="password">
+      <div id="cfgMsg"></div>
+      <div class="row-btn">
+        <button class="btn gray" id="cfgClose">닫기</button>
+        <button class="btn" id="cfgSave">연결 확인 후 저장</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // 우리 반 번호: 1~12번, 21~30번
+  const NUMS = [1,2,3,4,5,6,7,8,9,10,11,12,21,22,23,24,25,26,27,28,29,30];
+  const $ = id => document.getElementById(id);
+  const micBtn = $('mic'), statusEl = $('status'), liveEl = $('live');
+  let lastSaved = null, currentNum = null, currentPeriod = 'week';
+
+  // ---------- 설정 (주소·비밀번호를 이 폰에 기억) ----------
+  const STORE = 'obsCfg';
+  function loadCfg() { try { return JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { return null; } }
+  function saveCfg(c) { try { localStorage.setItem(STORE, JSON.stringify(c)); return true; } catch (e) { return false; } }
+  let CFG = loadCfg();
+
+  function openSetup(first) {
+    $('setup').style.display = 'flex';
+    $('cfgClose').style.display = first ? 'none' : 'inline-block';
+    if (CFG) { $('cfgUrl').value = CFG.url; $('cfgKey').value = CFG.key; }
+    $('cfgMsg').textContent = '';
+  }
+  $('gear').onclick = () => openSetup(false);
+  $('cfgClose').onclick = () => { $('setup').style.display = 'none'; };
+  $('cfgSave').onclick = async () => {
+    const url = $('cfgUrl').value.trim();
+    const key = $('cfgKey').value.trim();
+    if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
+      $('cfgMsg').textContent = '주소는 https://script.google.com/… 으로 시작하고 /exec로 끝나야 해요.';
+      return;
+    }
+    if (!key) { $('cfgMsg').textContent = '비밀번호를 입력해 주세요.'; return; }
+    const prev = CFG;
+    CFG = { url, key };
+    $('cfgMsg').style.color = '#777';
+    $('cfgMsg').textContent = '연결 확인 중…';
+    try {
+      await api('ping');
+      const ok = saveCfg(CFG);
+      $('setup').style.display = 'none';
+      setStatus(ok ? '연결됐어요! 버튼을 누르고 말해 주세요' : '연결됐어요. (이 브라우저는 설정을 기억하지 못할 수 있어요)');
+      init();
+    } catch (err) {
+      CFG = prev;
+      $('cfgMsg').style.color = '#d64545';
+      $('cfgMsg').textContent = err.message;
+    }
+  };
+
+  // ---------- 서버(앱스스크립트)와 주고받기 ----------
+  async function api(action, params) {
+    if (!CFG) throw new Error('먼저 ⚙️ 설정을 해 주세요.');
+    let res;
+    try {
+      res = await fetch(CFG.url, {
+        method: 'POST',
+        body: JSON.stringify(Object.assign({ action: action, key: CFG.key }, params || {}))
+      });
+    } catch (e) {
+      throw new Error('서버에 연결하지 못했어요. 인터넷과 앱 주소를 확인해 주세요.');
+    }
+    let j;
+    try { j = await res.json(); }
+    catch (e) { throw new Error('응답을 읽지 못했어요. 배포 액세스가 "모든 사용자"인지 확인해 주세요.'); }
+    if (!j.ok) throw new Error(j.error || '알 수 없는 오류');
+    return j.data;
+  }
+
+  // ---------- 화면 준비 ----------
+  (function () {
+    const sel = $('numSel');
+    sel.add(new Option('번호 (말로 했으면 비워 두세요)', ''));
+    NUMS.forEach(i => sel.add(new Option(i + '번', i)));
+
+    const chips = $('chips');
+    NUMS.forEach(i => {
+      const b = document.createElement('button');
+      b.textContent = i;
+      b.dataset.num = i;
+      b.onclick = () => showByNum(i);
+      chips.appendChild(b);
+    });
+
+    document.querySelectorAll('.tabs button').forEach(b => {
+      b.onclick = () => loadStats(b.dataset.p);
+    });
+  })();
+
+  function setStatus(msg) { statusEl.textContent = msg; }
+
+  // ---------- 번호 나누기 ----------
+  const KO = { '일':1,'이':2,'삼':3,'사':4,'오':5,'육':6,'륙':6,'유':6,'칠':7,'팔':8,'구':9 };
+  function koToNum(s) {
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+    if (s.indexOf('십') >= 0) {
+      const parts = s.split('십');
+      const tens = parts[0] ? KO[parts[0]] : 1;
+      const ones = parts[1] ? KO[parts[1]] : 0;
+      if (tens === undefined || ones === undefined) return null;
+      return tens * 10 + ones;
+    }
+    return (s.length === 1 && KO[s]) ? KO[s] : null;
+  }
+  function parse(text) {
+    const m = text.trim().match(/^([0-9]{1,2}|[일이삼사오육륙유칠팔구십]{1,3})\s*번\s*[,.:]?\s*([\s\S]*)$/);
+    if (!m) return null;
+    const num = koToNum(m[1]);
+    const content = m[2].trim();
+    if (!NUMS.includes(num) || !content) return null;
+    return { num, content };
+  }
+
+  // ---------- 음성 인식 ----------
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, listening = false, finalText = '';
+
+  if (!SR) {
+    micBtn.disabled = true; micBtn.style.opacity = .4;
+    setStatus('이 브라우저에서는 🎤 버튼을 쓸 수 없어요. 크롬으로 열어 주세요.');
+  }
+
+  micBtn.onclick = () => {
+    if (!SR) return;
+    if (!CFG) { openSetup(true); return; }
+    if (listening) { rec.stop(); return; }
+    rec = new SR();
+    rec.lang = 'ko-KR';
+    rec.interimResults = true;
+    rec.continuous = false;
+    finalText = '';
+    liveEl.textContent = '';
+
+    rec.onstart = () => {
+      listening = true; micBtn.classList.add('on');
+      setStatus('듣고 있어요… 말이 끝나면 잠시 기다려요');
+    };
+    rec.onresult = e => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t; else interim += t;
+      }
+      liveEl.textContent = finalText + interim;
+    };
+    rec.onerror = e => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setStatus('마이크 권한이 꺼져 있어요. 주소창 왼쪽 아이콘 → 권한 → 마이크 허용을 눌러 주세요.');
+      } else if (e.error === 'no-speech') {
+        setStatus('소리가 들리지 않았어요. 다시 눌러 주세요.');
+      } else {
+        setStatus('음성 인식 오류: ' + e.error);
+      }
+    };
+    rec.onend = () => {
+      listening = false; micBtn.classList.remove('on');
+      const text = finalText.trim();
+      if (text) handleVoice(text);
+    };
+    rec.start();
+  };
+
+  function handleVoice(text) {
+    const p = parse(text);
+    if (p) {
+      save(p.num, p.content, text);
+    } else {
+      $('txt').value = text;
+      setStatus('번호를 찾지 못했어요. 번호를 고르고 [저장]을 눌러 주세요.');
+    }
+  }
+
+  // ---------- 직접 입력 저장 ----------
+  $('saveBtn').onclick = () => {
+    const raw = $('txt').value.trim();
+    let num = $('numSel').value, content = raw;
+    if (!num) {
+      const p = parse(raw);
+      if (p) { num = p.num; content = p.content; }
+    }
+    if (!num) { setStatus('번호를 골라 주세요.'); return; }
+    if (!content) { setStatus('내용을 입력해 주세요.'); return; }
+    save(num, content, raw);
+  };
+
+  // ---------- 시트에 저장 ----------
+  async function save(num, content, raw) {
+    setStatus('저장하는 중…');
+    $('saveBtn').disabled = true;
+    try {
+      const r = await api('save', { num: num, content: content, raw: raw });
+      lastSaved = { row: r.row, raw: raw };
+      $('savedText').textContent = '✓ 저장됨 · ' + num + '번 · ' + content;
+      $('saved').style.display = 'block';
+      $('txt').value = ''; $('numSel').value = ''; liveEl.textContent = '';
+      setStatus('버튼을 누르고 다음 기록을 말해 주세요');
+      if (navigator.vibrate) navigator.vibrate(80);
+      refresh();
+    } catch (err) {
+      $('txt').value = raw; // 내용이 사라지지 않게 칸에 남겨 둬요
+      setStatus('저장 실패: ' + err.message);
+    } finally {
+      $('saveBtn').disabled = false;
+    }
+  }
+
+  // ---------- 되돌리기 ----------
+  $('undoBtn').onclick = async () => {
+    if (!lastSaved) return;
+    const target = lastSaved;
+    try {
+      const ok = await api('undo', { row: target.row, raw: target.raw });
+      if (ok) {
+        $('saved').style.display = 'none';
+        $('txt').value = target.raw;
+        setStatus('되돌렸어요. 고쳐서 다시 저장할 수 있어요.');
+        lastSaved = null;
+        refresh();
+      } else {
+        setStatus('되돌릴 수 없어요. 시트에서 직접 지워 주세요.');
+      }
+    } catch (err) {
+      setStatus('되돌리기 실패: ' + err.message);
+    }
+  };
+
+  // ---------- 간단 통계 ----------
+  async function loadStats(period) {
+    currentPeriod = period;
+    document.querySelectorAll('.tabs button').forEach(b => {
+      b.classList.toggle('active', b.dataset.p === period);
+    });
+    $('statSummary').textContent = '불러오는 중…';
+    try {
+      const s = await api('stats', { period: period });
+      const name = { week: '이번 주', month: '이번 달', all: '전체' }[period];
+      const range = period === 'all' ? '' : ' (' + s.from + ' ~ ' + s.today + ')';
+      $('statSummary').textContent = name + range + ' · 기록 ' + s.total + '개';
+
+      const zeros = NUMS.filter(n => !s.counts[n]);
+      const box = $('noRecord');
+      box.style.display = 'block';
+      box.textContent = zeros.length
+        ? '🔔 기록이 없는 아이 (' + zeros.length + '명): ' + zeros.join(', ') + '번'
+        : '🎉 모든 아이의 기록이 있어요!';
+
+      const max = Math.max(1, ...NUMS.map(n => s.counts[n] || 0));
+      const bars = $('bars');
+      bars.innerHTML = '';
+      NUMS.forEach(n => {
+        const c = s.counts[n] || 0;
+        const row = document.createElement('div');
+        row.className = 'bar-row' + (c === 0 ? ' zero' : '');
+        const label = document.createElement('span'); label.className = 'label'; label.textContent = n + '번';
+        const track = document.createElement('div'); track.className = 'track';
+        const fill = document.createElement('div'); fill.className = 'fill';
+        fill.style.width = (c / max * 100) + '%';
+        track.appendChild(fill);
+        const count = document.createElement('span'); count.className = 'count'; count.textContent = c;
+        row.appendChild(label); row.appendChild(track); row.appendChild(count);
+        row.onclick = () => showByNum(n);
+        bars.appendChild(row);
+      });
+    } catch (err) {
+      $('statSummary').textContent = '통계를 불러오지 못했어요: ' + err.message;
+    }
+  }
+
+  // ---------- 목록 그리기 ----------
+  function renderList(ul, rows, showNum, emptyMsg) {
+    ul.innerHTML = '';
+    if (!rows.length) {
+      const li = document.createElement('li');
+      li.className = 'meta'; li.textContent = emptyMsg;
+      ul.appendChild(li); return;
+    }
+    rows.forEach(r => {
+      const li = document.createElement('li');
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = '📅 ' + r[0] + '  ⏰ ' + r[1] + (showNum ? '  · ' + r[2] + '번' : '');
+      const body = document.createElement('div');
+      body.textContent = r[3];
+      li.appendChild(meta); li.appendChild(body);
+      ul.appendChild(li);
+    });
+  }
+
+  async function loadRecent() {
+    try {
+      const rows = await api('recent');
+      renderList($('recent'), rows, true, '아직 기록이 없어요');
+    } catch (err) {
+      $('recent').innerHTML = '';
+      const li = document.createElement('li');
+      li.className = 'meta'; li.textContent = '불러오지 못했어요: ' + err.message;
+      $('recent').appendChild(li);
+    }
+  }
+
+  async function showByNum(n) {
+    currentNum = n;
+    document.querySelectorAll('#chips button').forEach(b => {
+      b.classList.toggle('active', Number(b.dataset.num) === n);
+    });
+    $('byNumTitle').textContent = n + '번 기록 불러오는 중…';
+    try {
+      const rows = await api('byNum', { num: n });
+      $('byNumTitle').textContent = n + '번 · 기록 ' + rows.length + '개';
+      renderList($('byNum'), rows, false, '아직 ' + n + '번 기록이 없어요');
+    } catch (err) {
+      $('byNumTitle').textContent = '불러오지 못했어요: ' + err.message;
+    }
+  }
+
+  function refresh() {
+    loadRecent();
+    loadStats(currentPeriod);
+    if (currentNum) showByNum(currentNum);
+  }
+
+  function init() {
+    loadRecent();
+    loadStats(currentPeriod);
+  }
+
+  if (CFG) init(); else openSetup(true);
+</script>
+</body>
+</html>
